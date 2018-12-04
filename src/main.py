@@ -5,7 +5,7 @@ import math
 #import random
 from sklearn.utils import shuffle
 import numpy as np
-from tensorboardX import SummaryWriter
+#from tensorboardX import SummaryWriter
 
 import torch
 from torch.autograd import Variable
@@ -47,9 +47,9 @@ def train(args):
         q_len = corpus.maxlen_q
         r_len = corpus.maxlen_w + corpus.maxlen_r
         #print('q_len', q_len, 'r_len', r_len)
-        model = ABWIM(args.dropout, args.hidden_size, corpus.word_embedding, corpus.rela_embedding, q_len, r_len).cuda()
+        model = ABWIM(args.dropout, args.hidden_size, corpus.word_embedding, corpus.rela_embedding, q_len, r_len).to(device).to(device)
     elif args.model == 'HR-BiLSTM':
-        model = HR_BiLSTM(args.dropout, args.hidden_size, corpus.word_embedding, corpus.rela_embedding).cuda()
+        model = HR_BiLSTM(args.dropout, args.hidden_size, corpus.word_embedding, corpus.rela_embedding).to(device).to(device)
     #print(model)
 
     if args.optimizer == 'Adadelta':
@@ -88,21 +88,21 @@ def train(args):
                 question, pos_relas, pos_words, neg_relas, neg_words = zip(*batch_data)
                 q_len, pos_r_len, pos_w_len, neg_r_len, neg_w_len = zip(*train_data_len[batch_count-1])
             '''
-            q_length = Variable(torch.LongTensor(q_len)).cuda()
-            pos_r_length = Variable(torch.LongTensor(pos_r_len)).cuda()
-            pos_w_length = Variable(torch.LongTensor(pos_w_len)).cuda()
-            neg_r_length = Variable(torch.LongTensor(neg_r_len)).cuda()
-            neg_w_length = Variable(torch.LongTensor(neg_w_len)).cuda()
+            q_length = Variable(torch.LongTensor(q_len)).to(device)
+            pos_r_length = Variable(torch.LongTensor(pos_r_len)).to(device)
+            pos_w_length = Variable(torch.LongTensor(pos_w_len)).to(device)
+            neg_r_length = Variable(torch.LongTensor(neg_r_len)).to(device)
+            neg_w_length = Variable(torch.LongTensor(neg_w_len)).to(device)
             '''
                 #print('len(q_len)', len(q_len)) # batch_size
             #print('len(question)', len(question))
 
-            q = Variable(torch.LongTensor(question)).cuda()
-            p_relas = Variable(torch.LongTensor(pos_relas)).cuda()
-            p_words = Variable(torch.LongTensor(pos_words)).cuda()
-            n_relas = Variable(torch.LongTensor(neg_relas)).cuda()
-            n_words = Variable(torch.LongTensor(neg_words)).cuda()
-            ones = Variable(torch.ones(len(question))).cuda()
+            q = Variable(torch.LongTensor(question)).to(device)
+            p_relas = Variable(torch.LongTensor(pos_relas)).to(device)
+            p_words = Variable(torch.LongTensor(pos_words)).to(device)
+            n_relas = Variable(torch.LongTensor(neg_relas)).to(device)
+            n_words = Variable(torch.LongTensor(neg_words)).to(device)
+            ones = Variable(torch.ones(len(question))).to(device)
             variable_end_time = time.time()
             
             optimizer.zero_grad()
@@ -117,7 +117,7 @@ def train(args):
             loss.backward()
             optimizer.step()
             loss_backward_time = time.time()
-            writer.add_scalar('data/pre_gen_loss', loss.item(), global_step)
+            #writer.add_scalar('data/pre_gen_loss', loss.item(), global_step)
             global_step += 1
             if torch.__version__ == '0.3.0.post4':
                 total_loss += loss.data.cpu().numpy()[0]
@@ -204,12 +204,12 @@ def evaluation(model, mode='dev', global_step=None):
         count+=1
         training_objs = [obj for q_obj in batch_data for obj in q_obj]
         question, pos_relas, pos_words, neg_relas, neg_words = zip(*training_objs)
-        q = Variable(torch.LongTensor(question)).cuda()
-        p_relas = Variable(torch.LongTensor(pos_relas)).cuda()
-        p_words = Variable(torch.LongTensor(pos_words)).cuda()
-        n_relas = Variable(torch.LongTensor(neg_relas)).cuda()
-        n_words = Variable(torch.LongTensor(neg_words)).cuda()
-        ones = Variable(torch.ones(len(question))).cuda()
+        q = Variable(torch.LongTensor(question)).to(device)
+        p_relas = Variable(torch.LongTensor(pos_relas)).to(device)
+        p_words = Variable(torch.LongTensor(pos_words)).to(device)
+        n_relas = Variable(torch.LongTensor(neg_relas)).to(device)
+        n_words = Variable(torch.LongTensor(neg_words)).to(device)
+        ones = Variable(torch.ones(len(question))).to(device)
         
         pos_score = model_test(q, p_relas, p_words)
         #pos_alpha = model.ret_alpha(q, p_relas, p_words)
@@ -270,6 +270,8 @@ def evaluation(model, mode='dev', global_step=None):
     return print_str, average_loss, average_acc
 
 if __name__ == '__main__':
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
     # Set random seed
     torch.manual_seed(1234)
     torch.cuda.manual_seed(1234)
@@ -338,7 +340,7 @@ if __name__ == '__main__':
         val_data = batchify(val_data, args.batch_question_size)
 
         # Create SummaryWriter
-        writer = SummaryWriter(log_dir='save_model/tensorboard_log')
+        #writer = SummaryWriter(log_dir='save_model/tensorboard_log')
         train(args)
 
     if args.test:

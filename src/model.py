@@ -69,7 +69,7 @@ class HR_BiLSTM(nn.Module):
         q12 = q12.permute(0, 2, 1)
         # After maxpooling, the question representation shape = [batch_size, hidden_size*2]
         question_representation = nn.MaxPool1d(q12.shape[2])(q12).squeeze()
-        print(question_representation.shape)
+        #print(question_representation.shape)
         # 2nd way of Hierarchical Residual Matching
         #q1_max = nn.MaxPool1d(question_out_1.shape[2])(question_out_1)
         #q2_max = nn.MaxPool1d(question_out_2.shape[2])(question_out_2)
@@ -86,7 +86,7 @@ class HR_BiLSTM(nn.Module):
         r = r.permute(0, 2, 1)
         #print('r.shape', r.shape)
         relation_representation = nn.MaxPool1d(r.shape[2])(r).squeeze()
-        print(relation_representation.shape)
+        #print(relation_representation.shape)
         '''pack_pad_sequence
         # Revert to original order
         question_representation = self.revert_order(question_representation, sorted_q_idx)
@@ -164,8 +164,10 @@ class Model(nn.Module):
         rela_hs, hidden_state = self.encode(rela_x, hidden_state)
         rela_text_hs, hidden_state = self.encode(rela_text_x, hidden_state)
 
-        h_0 = Variable(th.zeros([self.args.num_layers*2, len(ques_x[0]), self.args.hidden_size])).cuda()
-        c_0 = Variable(th.zeros([self.args.num_layers*2, len(ques_x[0]), self.args.hidden_size])).cuda()
+        #h_0 = Variable(th.zeros([self.args.num_layers*2, len(ques_x[0]), self.args.hidden_size])).cuda()
+        #c_0 = Variable(th.zeros([self.args.num_layers*2, len(ques_x[0]), self.args.hidden_size])).cuda()
+        h_0 = Variable(th.zeros([self.args.num_layers*2, len(ques_x[0]), self.args.hidden_size])).to(device)
+        c_0 = Variable(th.zeros([self.args.num_layers*2, len(ques_x[0]), self.args.hidden_size])).to(device)
         ques_hs2, _ = self.rnn2(ques_hs1, (h_0, c_0)) 
 
         ques_hs = ques_hs1 + ques_hs2
@@ -183,8 +185,8 @@ class Model(nn.Module):
 
     def encode(self, input, hidden_state=None, return_sequence=True):
         if hidden_state==None:
-            h_0 = Variable(th.zeros([self.args.num_layers*2, len(input[0]), self.args.hidden_size])).cuda()
-            c_0 = Variable(th.zeros([self.args.num_layers*2, len(input[0]), self.args.hidden_size])).cuda()
+            h_0 = Variable(th.zeros([self.args.num_layers*2, len(input[0]), self.args.hidden_size])).to(device)
+            c_0 = Variable(th.zeros([self.args.num_layers*2, len(input[0]), self.args.hidden_size])).to(device)
         else:
             h_0, c_0 = hidden_state
         h_input = h_0

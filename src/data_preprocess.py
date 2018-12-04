@@ -16,18 +16,18 @@ class DataManager:
     def __init__(self, data_type):
         self.data_type = data_type
         if self.data_type == 'SQ':
-            self.train_data_path = 'KBQA_RE_data/sq_relations/train.replace_ne.withpool'
-            self.val_data_path = 'KBQA_RE_data/sq_relations/valid.replace_ne.withpool'
-            self.test_data_path = 'KBQA_RE_data/sq_relations/test.replace_ne.withpool'
-            self.word_embedding_path = 'SQ_word_emb_300d.txt'
-            self.rela_embedding_path = 'SQ_rela_emb_300d.txt'
-            self.relations_map = self.load_relations_map('KBQA_RE_data/sq_relations/relation.2M.list')
+            self.train_data_path = 'data/sq_relations/train.replace_ne.withpool'
+            self.val_data_path = 'data/sq_relations/valid.replace_ne.withpool'
+            self.test_data_path = 'data/sq_relations/test.replace_ne.withpool'
+            self.word_embedding_path = 'data/embedding/SQ_word_emb_300d.txt'
+            self.rela_embedding_path = 'data/embedding/SQ_rela_emb_300d.txt'
+            self.relations_map = self.load_relations_map('data/sq_relations/relation.2M.list')
         else:
-            self.train_data_path = 'KBQA_RE_data/webqsp_relations/WebQSP.RE.train.with_boundary.withpool.dlnlp.txt'
-            self.test_data_path = 'KBQA_RE_data/webqsp_relations/WebQSP.RE.test.with_boundary.withpool.dlnlp.txt'
-            self.word_embedding_path = 'KBQA_RE_word_emb_300d.txt'
-            self.rela_embedding_path = 'KBQA_RE_rela_emb_300d.txt'
-            self.relations_map = self.load_relations_map('KBQA_RE_data/webqsp_relations/relations.txt')
+            self.train_data_path = 'data/webqsp_relations/WebQSP.RE.train.with_boundary.withpool.dlnlp.txt'
+            self.test_data_path = 'data/webqsp_relations/WebQSP.RE.test.with_boundary.withpool.dlnlp.txt'
+            self.word_embedding_path = 'data/embedding/KBQA_RE_word_emb_300d.txt'
+            self.rela_embedding_path = 'data/embedding/KBQA_RE_rela_emb_300d.txt'
+            self.relations_map = self.load_relations_map('data/webqsp_relations/relations.txt')
 #        self.train_data_path = '1hop_2hop_data/WebQSP.1hop'
 #        self.test_data_path =  '1hop_2hop_data/WebQSP.2hop'
         #self.word_embedding_path = 'KBQA_RE_word_emb_300d_last.txt'
