@@ -68,8 +68,8 @@ class HR_BiLSTM(nn.Module):
         # Transform q12 shape from [batch_size, maxlen, hidden_size*2] to [batch_size, hidden_size*2, maxlen]
         q12 = q12.permute(0, 2, 1)
         # After maxpooling, the question representation shape = [batch_size, hidden_size*2]
-        question_representation = nn.MaxPool1d(q12.shape[2])(q12).squeeze()
-        #print(question_representation.shape)
+        question_representation = nn.MaxPool1d(q12.shape[2])(q12).squeeze(dim=2)
+        #print('q', question_representation.shape)
 
         # 2nd way of Hierarchical Residual Matching
         #q1_max = nn.MaxPool1d(question_out_1.shape[2])(question_out_1)
@@ -86,8 +86,8 @@ class HR_BiLSTM(nn.Module):
         #print('r.shape', r.shape)
         r = r.permute(0, 2, 1)
         #print('r.shape', r.shape)
-        relation_representation = nn.MaxPool1d(r.shape[2])(r).squeeze()
-        #print(relation_representation.shape)
+        relation_representation = nn.MaxPool1d(r.shape[2])(r).squeeze(dim=2)
+        #print('r', relation_representation.shape)
         '''pack_pad_sequence
         # Revert to original order
         question_representation = self.revert_order(question_representation, sorted_q_idx)
@@ -127,11 +127,7 @@ class HR_BiLSTM(nn.Module):
         # Revert to original order
         relation_representation = self.revert_order(relation_representation, sorted_rela_idx)
         '''
-        try:
-            score = self.cos(question_representation, relation_representation)
-        #print('score.shape', score.shape)
-        except:
-            print(question_representation.shape, relation_representation.shape)
+        score = self.cos(question_representation, relation_representation)
         return score
     
 class Model(nn.Module):

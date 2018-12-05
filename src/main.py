@@ -1,12 +1,13 @@
 import sys
+import os
 import time
+import datetime
 import argparse
 import math
 #import random
 from sklearn.utils import shuffle
 import numpy as np
 #from tensorboardX import SummaryWriter
-
 import torch
 from torch.autograd import Variable
 
@@ -30,12 +31,16 @@ def cal_acc(sorted_score_label):
         return 0
 
 def save_best_model(model):
-    import datetime
     now = datetime.datetime.now()
+
+    if not os.path.exists('save_model'):
+        os.makedirs('save_model')
+
     if args.save_model_path == '':
-        args.save_model_path = f'save_model/{now.month}{now.day}_{now.hour}h{now.minute}m.pt'
+        args.save_model_path = f'save_model/{now.month:02}{now.day:02}{now.hour:02}{now.minute:02}.pt'
         with open('log.txt', 'a') as outfile:
             outfile.write(str(args)+'\n')
+    
     print('save model at {}'.format(args.save_model_path))
     with open(args.save_model_path, 'wb') as outfile:
         torch.save(model, outfile)
@@ -53,16 +58,15 @@ def train(args):
     #print(model)
 
     if args.optimizer == 'Adadelta':
-        print('optimizer: Adadelta')
         optimizer = torch.optim.Adadelta(filter(lambda p: p.requires_grad, model.parameters()), lr=args.learning_rate)
     elif args.optimizer == 'Adagrad':
         optimizer = torch.optim.Adagrad(filter(lambda p: p.requires_grad, model.parameters()), lr=args.learning_rate)
     elif args.optimizer == 'RMSprop':
         optimizer = torch.optim.RMSprop(filter(lambda p: p.requires_grad, model.parameters()), lr=args.learning_rate)
+    elif args.optimizer == 'Adam':
+        optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=args.learning_rate)
     else:
-        print('optimizer: SGD')
         optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=args.learning_rate)
-    print()
 
     best_model = None
     best_val_loss = None
@@ -161,14 +165,13 @@ def train(args):
             #print(f'loss calculate time:{loss_backward_time-model_end_time:.3f} / {loss_backward_time-epoch_start_time:.3f}')
 
             #print_str = f'Epoch {epoch_count} batch {batch_count} Spend Time:{elapsed:.2f}s Loss:{average_loss*1000:.4f} Acc:{average_acc:.4f} #_question:{nb_question}'
-            if batch_count % 10 == 0:
+            if batch_count % 1 == 0:
                 print('\r', print_str, end='')
             #batch_end_time = time.time()
             #print('one batch', batch_end_time-batch_start_time)
-        print('\r', print_str, end='')
-        print()
+        print('\r', print_str, end='#\n')
         val_print_str, val_loss, _ = evaluation(model, 'dev', global_step)
-        print('Val', val_print_str)
+        print('Val', val_print_str, '#')
         #log_str, _, test_acc = evaluation(model, 'test')
         #print('Test', log_str)
         #print('Test Acc', test_acc)
@@ -199,7 +202,7 @@ def evaluation(model, mode='dev', global_step=None):
         input_data = val_data
     nb_question = sum(len(batch_data) for batch_data in input_data)
     count = 0;
-    print('nb_question', nb_question)
+    #print('nb_question', nb_question)
     for batch_count, batch_data in enumerate(input_data, 1):
         count+=1
         training_objs = [obj for q_obj in batch_data for obj in q_obj]
@@ -212,6 +215,7 @@ def evaluation(model, mode='dev', global_step=None):
         ones = Variable(torch.ones(len(question))).to(device)
         
         pos_score = model_test(q, p_relas, p_words)
+        #print('\reval ', batch_count, pos_score, '')
         #pos_alpha = model.ret_alpha(q, p_relas, p_words)
         neg_score = model_test(q, n_relas, n_words)
         loss = loss_function(pos_score, neg_score, ones)
@@ -254,11 +258,15 @@ def evaluation(model, mode='dev', global_step=None):
             total_acc += cal_acc(sorted_score_label)
             #print(total_acc)
 #        acc1 = total_acc / (batch_count * args.batch_size)
-#        acc2 = total_acc / question_counter
+        # modify: batch_count should be batch_count * question_per_batch
+        acc2 = total_acc / batch_count
+        time_elapsed = time.time()-start_time
+        print_str = f'Batch {batch_count} Spend Time:{time_elapsed:.2f}s Loss:{average_loss*1000:.4f} Acc:{acc2:.4f}'
+        print('\rVal', print_str, end='#\n')
    # print("\n")
     #print(count)
-    if mode == 'dev':
-        writer.add_scalar('val_loss', average_loss.item(), global_step)
+#    if mode == 'dev':
+#        writer.add_scalar('val_loss', average_loss.item(), global_step)
 
     time_elapsed = time.time()-start_time
     average_acc = total_acc / nb_question
@@ -304,6 +312,7 @@ if __name__ == '__main__':
 
     # Load data
     corpus = DataManager(args.data_type)
+#    sys.exit()
     if args.train:
         if args.data_type == 'SQ':
             train_data = corpus.token_train_data

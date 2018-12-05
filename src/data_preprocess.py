@@ -87,21 +87,21 @@ class DataManager:
         if self.data_type == 'SQ':
             self.token_val_data = self.pad_train_data(token_val_data, self.maxlen_q, self.maxlen_r, self.maxlen_w, self.maxlen_r, self.maxlen_w)
         self.token_test_data = self.pad_train_data(token_test_data, self.maxlen_q, self.maxlen_r, self.maxlen_w, self.maxlen_r, self.maxlen_w)
-        self.check_input_data(test_data, self.token_test_data)
+        self.check_input_data(train_data, self.token_train_data, 2799+69-1)
 
-    def check_input_data(self, origin_data, token_data):
+    def check_input_data(self, origin_data, token_data, idx):
         print()
         print('Check token result')
-        print('# objs in the 1st question of test data:', len(origin_data[0]), len(token_data[0]))
-        print('1st obj in the 1st question of test data:')
+        print('# objs in the', idx,'st question of train data:', len(origin_data[idx]), len(token_data[idx]))
+        print('1st obj in the 1st question of train data:')
         print('obj: (question, pos_relas, pos_words, neg_relas, neg_words)')
-        print(origin_data[0][0])
-        print(token_data[0][0])
-        print(self.idx2word(token_data[0][0][0])) 
-        print(self.idx2word(token_data[0][0][1], 'relation'))
-        print(self.idx2word(token_data[0][0][2]))
-        print(self.idx2word(token_data[0][0][3], 'relation'))
-        print(self.idx2word(token_data[0][0][4]))
+        print(origin_data[idx][0])
+        print(token_data[idx][0])
+        print(self.idx2word(token_data[idx][0][0])) 
+        print(self.idx2word(token_data[idx][0][1], 'relation'))
+        print(self.idx2word(token_data[idx][0][2]))
+        print(self.idx2word(token_data[idx][0][3], 'relation'))
+        print(self.idx2word(token_data[idx][0][4]))
         print()
     
     def idx2word(self, id_sentence, id_type='word'):
