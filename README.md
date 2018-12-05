@@ -1,12 +1,19 @@
 # 682project
 
 ## Requirements
-Python 3.6, 
-PyTorch 0.4, 
-Scikit-learn 0.20
+Python 3.6
 
-
+PyTorch 0.4 
 
 ## Run
-source set_env.sh
-${KBQA_ROOT}/bin/srun.sh
+Set environment parameters:
+
+    source set_env.sh
+
+Run:
+
+    ${KBQA_ROOT}/bin/run.sh
+
+If run on Slurm:
+
+    ${KBQA_ROOT}/bin/srun.sh
