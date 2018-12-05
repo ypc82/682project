@@ -8,21 +8,21 @@ class HR_BiLSTM(nn.Module):
     def __init__(self, dropout_rate, hidden_size, word_emb, rela_emb):
         super(HR_BiLSTM, self).__init__()
         self.hidden_size = hidden_size
+        self.emb_dim = word_emb.shape[1]
         self.nb_layers = 1
-        self.dropout_rate = dropout_rate
-        self.dropout = nn.Dropout(self.dropout_rate)
+        self.dropout = nn.Dropout(dropout_rate)
         self.cos = nn.CosineSimilarity(1)
         
         # Word Embedding layer
-        self.word_embedding = nn.Embedding(word_emb.shape[0], word_emb.shape[1])
+        self.word_embedding = nn.Embedding(word_emb.shape[0], self.emb_dim)
         self.word_embedding.weight = nn.Parameter(th.from_numpy(word_emb).float())
         self.word_embedding.weight.requires_grad = False # fix the embedding matrix
         # Rela Embedding layer
-        self.rela_embedding = nn.Embedding(rela_emb.shape[0], rela_emb.shape[1])
+        self.rela_embedding = nn.Embedding(rela_emb.shape[0], self.emb_dim)
         self.rela_embedding.weight = nn.Parameter(th.from_numpy(rela_emb).float())
         self.rela_embedding.weight.requires_grad = True # fix the embedding matrix
         # LSTM layer
-        self.bilstm_1 = nn.LSTM(word_emb.shape[1], hidden_size, num_layers=self.nb_layers, bidirectional=True, batch_first=True)
+        self.bilstm_1 = nn.LSTM(self.emb_dim, hidden_size, num_layers=self.nb_layers, bidirectional=True, batch_first=True)
         self.bilstm_2 = nn.LSTM(hidden_size*2, hidden_size, num_layers=self.nb_layers, bidirectional=True, batch_first=True)
 
     def revert_order(self, sorted_seq, sorted_seqidx):
@@ -70,6 +70,7 @@ class HR_BiLSTM(nn.Module):
         # After maxpooling, the question representation shape = [batch_size, hidden_size*2]
         question_representation = nn.MaxPool1d(q12.shape[2])(q12).squeeze()
         #print(question_representation.shape)
+
         # 2nd way of Hierarchical Residual Matching
         #q1_max = nn.MaxPool1d(question_out_1.shape[2])(question_out_1)
         #q2_max = nn.MaxPool1d(question_out_2.shape[2])(question_out_2)
@@ -126,8 +127,11 @@ class HR_BiLSTM(nn.Module):
         # Revert to original order
         relation_representation = self.revert_order(relation_representation, sorted_rela_idx)
         '''
-        score = self.cos(question_representation, relation_representation)
+        try:
+            score = self.cos(question_representation, relation_representation)
         #print('score.shape', score.shape)
+        except:
+            print(question_representation.shape, relation_representation.shape)
         return score
     
 class Model(nn.Module):

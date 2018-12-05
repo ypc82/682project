@@ -6,7 +6,6 @@
 import sys
 import os
 import time
-import gensim
 import numpy as np
 
 import torch
@@ -212,6 +211,7 @@ class DataManager:
         return relas, words
 
     def load_word_embedding_from_gensim(self, input_path):
+        import gensim
         print('Load pretrain word embedding from', input_path)
         #start = time.time()
 #        model = gensim.models.Word2Vec.load_word2vec_format(input_path, binary=True)

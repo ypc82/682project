@@ -290,12 +290,12 @@ if __name__ == '__main__':
     parser.add_argument('--optimizer', type=str, default='Adadelta')
     parser.add_argument('--epoch_num', type=int, default=1000)
     parser.add_argument('--batch_type', type=str, default='batch_question') # [batch_question/batch_obj]
-    parser.add_argument('--batch_question_size', type=int, default=32)
+    parser.add_argument('--batch_question_size', type=int, default=1) #32
     parser.add_argument('--batch_obj_size', type=int, default=128)
     parser.add_argument('--earlystop_tolerance', type=int, default=5)
     parser.add_argument('--save_model_path', type=str, default='')
     parser.add_argument('--pretrain_model', type=str, default=None)
-    parser.add_argument('--data_type', type=str, default='SQ') # [SQ/WQ]
+    parser.add_argument('--data_type', type=str, default='WQ') # [SQ/WQ]
     args = parser.parse_args()
     if args.model == 'ABWIM':
         args.margin = 0.1
@@ -313,8 +313,7 @@ if __name__ == '__main__':
             print('validation data length:', len(val_data))
         else:
             # shuffle training data
-            #random.shuffle(corpus.token_train_data)
-            shuffle(corpus.token_train_data, corpus.train_data_len, random_state=1234)
+#            shuffle(corpus.token_train_data, corpus.train_data_len, random_state=1234)
             # split training data to train and validation
             split_num = int(0.9*len(corpus.token_train_data))
             print('split_num=', split_num)
