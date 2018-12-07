@@ -16,11 +16,11 @@ class HR_BiLSTM(nn.Module):
         # Word Embedding layer
         self.word_embedding = nn.Embedding(word_emb.shape[0], self.emb_dim)
         self.word_embedding.weight = nn.Parameter(th.from_numpy(word_emb).float())
-        self.word_embedding.weight.requires_grad = False # fix the embedding matrix
+        self.word_embedding.weight.requires_grad = True 
         # Rela Embedding layer
         self.rela_embedding = nn.Embedding(rela_emb.shape[0], self.emb_dim)
         self.rela_embedding.weight = nn.Parameter(th.from_numpy(rela_emb).float())
-        self.rela_embedding.weight.requires_grad = True # fix the embedding matrix
+        self.rela_embedding.weight.requires_grad = True 
         # LSTM layer
         self.bilstm_1 = nn.LSTM(self.emb_dim, hidden_size, num_layers=self.nb_layers, bidirectional=True, batch_first=True)
         self.bilstm_2 = nn.LSTM(hidden_size*2, hidden_size, num_layers=self.nb_layers, bidirectional=True, batch_first=True)
@@ -40,16 +40,29 @@ class HR_BiLSTM(nn.Module):
         return packed_seq, sorted_seqidx
 
     def forward(self, question, rela_relation, word_relation):
-#    def forward(self, question, rela_relation, word_relation, q_seqlen, rela_seqlen, word_seqlen):
-        # Input shape is [batch_size, maxlen]
-        # Embedding shape is [batch_size, maxlen, emb_dim]
+        # Embedding Layer
         question = self.dropout(self.word_embedding(question))
         rela_relation = self.dropout(self.rela_embedding(rela_relation))
         word_relation = self.dropout(self.word_embedding(word_relation))
 
-        # output shape of bilstm is [batch_size, maxlen, hidden_size*2]
+        # Layer 1
+        # Question Representation
         question_out_1, question_hidden = self.bilstm_1(question)
         question_out_1 = self.dropout(question_out_1)
+
+        # Relation Representation
+        word_relation_out, word_relation_hidden = self.bilstm_1(word_relation)
+        word_relation_out = self.dropout(word_relation_out)
+
+        rela_relation_out, rela_relation_hidden = self.bilstm_1(rela_relation, word_relation_hidden)
+        rela_relation_out = self.dropout(rela_relation_out)
+
+        r = th.cat([rela_relation_out, word_relation_out], 1)
+        r = r.permute(0, 2, 1)
+        relation_representation = nn.MaxPool1d(r.shape[2])(r).squeeze(dim=2)
+#        print('r', relation_representation.shape)
+        
+        # Layer 2
         question_out_2, _ = self.bilstm_2(question_out_1)
         question_out_2 = self.dropout(question_out_2)
         '''pack_pad_sequence
@@ -63,31 +76,18 @@ class HR_BiLSTM(nn.Module):
         question_out_2 = self.dropout(question_out_2)
         '''
         
+        # Layer 3
         # 1st way of Hierarchical Residual Matching
         q12 = question_out_1 + question_out_2
-        # Transform q12 shape from [batch_size, maxlen, hidden_size*2] to [batch_size, hidden_size*2, maxlen]
         q12 = q12.permute(0, 2, 1)
-        # After maxpooling, the question representation shape = [batch_size, hidden_size*2]
         question_representation = nn.MaxPool1d(q12.shape[2])(q12).squeeze(dim=2)
-        #print('q', question_representation.shape)
+#        print('q', question_representation.shape)
 
         # 2nd way of Hierarchical Residual Matching
         #q1_max = nn.MaxPool1d(question_out_1.shape[2])(question_out_1)
         #q2_max = nn.MaxPool1d(question_out_2.shape[2])(question_out_2)
         #question_representation = q1_max + q2_max
 
-        word_relation_out, word_relation_hidden = self.bilstm_1(word_relation)
-        word_relation_out = self.dropout(word_relation_out)
-        #print(word_relation_out.shape)
-        rela_relation_out, rela_relation_hidden = self.bilstm_1(rela_relation, word_relation_hidden)
-        rela_relation_out = self.dropout(rela_relation_out)
-        #print(rela_relation_out.shape)
-        r = th.cat([rela_relation_out, word_relation_out], 1)
-        #print('r.shape', r.shape)
-        r = r.permute(0, 2, 1)
-        #print('r.shape', r.shape)
-        relation_representation = nn.MaxPool1d(r.shape[2])(r).squeeze(dim=2)
-        #print('r', relation_representation.shape)
         '''pack_pad_sequence
         # Revert to original order
         question_representation = self.revert_order(question_representation, sorted_q_idx)
@@ -151,6 +151,7 @@ class Model(nn.Module):
         self.cos = nn.CosineSimilarity(dim=1)
         self.tanh = nn.Tanh()
         return
+
     def forward(self, ques_x, rela_text_x, rela_x):
         ques_x = th.transpose(ques_x, 0, 1)
         rela_text_x = th.transpose(rela_text_x, 0, 1)

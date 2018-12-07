@@ -87,7 +87,9 @@ class DataManager:
         if self.data_type == 'SQ':
             self.token_val_data = self.pad_train_data(token_val_data, self.maxlen_q, self.maxlen_r, self.maxlen_w, self.maxlen_r, self.maxlen_w)
         self.token_test_data = self.pad_train_data(token_test_data, self.maxlen_q, self.maxlen_r, self.maxlen_w, self.maxlen_r, self.maxlen_w)
-        self.check_input_data(train_data, self.token_train_data, 2799+69-1)
+
+        # Check input data
+#        self.check_input_data(train_data, self.token_train_data, 2799+69-1)
 
     def check_input_data(self, origin_data, token_data, idx):
         print()
@@ -244,7 +246,7 @@ class DataManager:
         # Load 300 dim pretrained word2vec embeddings trained on GoogleNews. 
         # To be more efficient, only load words contains in training/testing data.
         exception_counter = 0
-        input_w2v_path = '/corpus/wordvector/word2vec/GoogleNews-vectors-negative300.bin'
+        input_w2v_path = 'data/embedding/GoogleNews-vectors-negative300.bin'
         Word2Vec_embedding = self.load_word_embedding_from_gensim(input_w2v_path)
         word_list = ['PADDING','<e>','<unk>']
         embedding_dic = {}
