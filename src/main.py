@@ -30,6 +30,37 @@ def cal_acc(sorted_score_label):
     else:
         return 0
 
+def eval_model(pos_scores, neg_scores, start_time):
+    print_str = ''
+    if args.batch_type == 'batch_question':
+        start, end = 0, 0
+        for idx, q_obj in enumerate(batch_data):
+            end += len(q_obj)
+            score_list = [pos_scores[start]]
+            batch_neg_score = neg_scores[start:end]
+            start = end
+            label_list = [1]
+            for ns in batch_neg_score:
+                score_list.append(ns)
+            label_list += [0] * len(batch_neg_score)
+            #print('len(score_list), score_list')
+            #print(len(score_list), score_list)
+            #print('len(label_list), label_list')
+            #print(len(label_list), label_list)
+            score_label = [(x, y) for x, y in zip(score_list, label_list)]
+            sorted_score_label = sorted(score_label, key=lambda x:x[0], reverse=True)
+            total_acc += cal_acc(sorted_score_label)
+        #average_acc = total_acc / (batch_count * args.batch_size)
+        #average_acc = total_acc / nb_question
+        average_acc = total_acc / batch_count # batch_type = question, batch_size = 1
+        elapsed = time.time() - epoch_start_time
+        print_str = f'Epoch {epoch_count} batch {batch_count} Spend Time:{elapsed:.2f}s Loss:{average_loss*1000:.4f} Acc:{average_acc:.4f} #_question:{nb_question}'
+    else:
+        elapsed = time.time() - start_time
+        print_str = f'Epoch {epoch_count} batch {batch_count} Spend Time:{elapsed:.2f}s Loss:{average_loss*1000:.4f}'
+
+    return print_str
+
 def save_best_model(model):
     now = datetime.datetime.now()
 
@@ -46,7 +77,6 @@ def save_best_model(model):
         torch.save(model, outfile)
 
 def train(args):
-    # Build model
     print('Build model')
     if args.model == 'ABWIM':
         q_len = corpus.maxlen_q
@@ -116,39 +146,9 @@ def train(args):
 
             # Calculate accuracy and f1
             if batch_count % args.print_every == 0:
-                if args.batch_type == 'batch_question':
-                    all_pos = all_pos_score.data.cpu().numpy()
-                    all_neg = all_neg_score.data.cpu().numpy()
-                    start, end = 0, 0
-                    for idx, q_obj in enumerate(batch_data):
-                        end += len(q_obj)
-                        score_list = [all_pos[start]]
-                        batch_neg_score = all_neg[start:end]
-                        start = end
-                        label_list = [1]
-                        for ns in batch_neg_score:
-                            score_list.append(ns)
-                        label_list += [0] * len(batch_neg_score)
-                        #print('len(score_list), score_list')
-                        #print(len(score_list), score_list)
-                        #print('len(label_list), label_list')
-                        #print(len(label_list), label_list)
-                        score_label = [(x, y) for x, y in zip(score_list, label_list)]
-                        sorted_score_label = sorted(score_label, key=lambda x:x[0], reverse=True)
-                        total_acc += cal_acc(sorted_score_label)
-                    #average_acc = total_acc / (batch_count * args.batch_size)
-                    #average_acc = total_acc / nb_question
-                    average_acc = total_acc / batch_count # batch_type = question, batch_size = 1
-                    elapsed = time.time() - epoch_start_time
-                    print_str = f'Epoch {epoch_count} batch {batch_count} Spend Time:{elapsed:.2f}s Loss:{average_loss*1000:.4f} Acc:{average_acc:.4f} #_question:{nb_question}'
-                else:
-                    elapsed = time.time() - epoch_start_time
-                    print_str = f'Epoch {epoch_count} batch {batch_count} Spend Time:{elapsed:.2f}s Loss:{average_loss*1000:.4f}'
-
-                #print_str = f'Epoch {epoch_count} batch {batch_count} Spend Time:{elapsed:.2f}s Loss:{average_loss*1000:.4f} Acc:{average_acc:.4f} #_question:{nb_question}'
+                print_str = eval_model(all_pos_score.data.cpu().numpy(), all_neg_score.data.cpu().numpy(),
+                                       epoch_start_time)
                 print('\r', print_str, end='')
-            #batch_end_time = time.time()
-            #print('one batch', batch_end_time-batch_start_time)
         print('\r', print_str, end='#\n')
         val_print_str, val_loss, _ = evaluation(model, 'dev', global_step)
         print('\rVal', val_print_str, '#\n')
@@ -276,8 +276,8 @@ if __name__ == '__main__':
     parser.add_argument('--margin', type=float, default=0.1)
     parser.add_argument('--learning_rate', type=float, default=2.0) # [0.1/0.5/1.0/2.0]
     parser.add_argument('--hidden_size', type=int, default=100) # [50/100/200/400]
-    parser.add_argument('--optimizer', type=str, default='Adadelta')
-    parser.add_argument('--epoch_num', type=int, default=1000)
+    parser.add_argument('--optimizer', type=str, default='RMSprop')
+    parser.add_argument('--epoch_num', type=int, default=100)
     parser.add_argument('--batch_type', type=str, default='batch_question') # [batch_question/batch_obj]
     parser.add_argument('--batch_question_size', type=int, default=1) #32
     parser.add_argument('--batch_obj_size', type=int, default=128)
