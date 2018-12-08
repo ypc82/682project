@@ -30,6 +30,20 @@ def cal_acc(sorted_score_label):
     else:
         return 0
 
+def cal_mrr(sorted_score_label):
+    for i in range(len(sroted_score_label)):
+        if sorted_score_label[i][1] == 1:
+            return 1/i
+
+def extract_error(sorted_score_label):
+    error_case = []
+    for score, label, idx in sorted_score_label:
+        if label == 1:
+            break
+        else:
+            error_case.append(idx)
+    return error_case
+
 def save_best_model(model):
     now = datetime.datetime.now()
 
@@ -174,6 +188,8 @@ def evaluation(model, mode='dev', global_step=None):
     model_test = model.eval()
     start_time = time.time()
     total_loss, total_acc = 0.0, 0.0
+    error_idx = []
+
     if mode == 'test':
         input_data = test_data
         #print(model_test)
@@ -222,7 +238,7 @@ def evaluation(model, mode='dev', global_step=None):
                 score_list.append(ns)
             label_list += [0] * len(batch_neg_score)
             start = end
-            score_label = [(x, y) for x, y in zip(score_list, label_list)]
+            score_label = [(x, y, idx) for idx, x, y in enumerate(zip(score_list, label_list))]
             #alpha_label = [(x, y) for x, y in zip(score_list_alpha, label_list)]
             #print("\n")
             #print(score_label[:10])
@@ -236,6 +252,8 @@ def evaluation(model, mode='dev', global_step=None):
             #file.write(sorted_alpha_label)
             #file.close()
             total_acc += cal_acc(sorted_score_label)
+            error_cases = extract_error(sorted_score_label)
+            error_idx.append(error_cases)
             #print(total_acc)
 #        acc1 = total_acc / (batch_count * args.batch_size)
         # modify: batch_count should be batch_count * question_per_batch
@@ -255,7 +273,7 @@ def evaluation(model, mode='dev', global_step=None):
 #    print('average_acc', average_acc)
 #    print(question_counter, nb_question)
     print_str = f'Batch {batch_count} Spend Time:{time_elapsed:.2f}s Loss:{average_loss*1000:.4f} Acc:{average_acc:.4f} # question:{nb_question}'
-    return print_str, average_loss, average_acc
+    return print_str, average_loss, average_acc, error_idx
 
 if __name__ == '__main__':
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -344,9 +362,27 @@ if __name__ == '__main__':
             print('Load pretrain model', args.pretrain_model)
             with open(args.pretrain_model, 'rb') as infile:
                 model = torch.load(infile) 
-        log_str, _, test_acc = evaluation(model, 'test')
+        log_str, _, test_acc, error_list = evaluation(model, 'test')
+        
         print(log_str)
         print(test_acc)
+
+        test_data = ''.join(test_data)
+        if(len(test_data) != len(error_list)):
+            print(len(test_data), len(error_list))
+            sys.exit()
+        
+        for idx, error_cases in enumerate(error_list):
+        #Return: [[(question, pos_relas, pos_words, neg_relas, neg_words)*neg_size] * batch_size] * nb_batch]
+            if len(error_cases) > 0:
+                question = test_data[idx][0]
+                question = idx2word(question, id_type='word')
+                for error_idx in error_cases:
+                    error_relation = test_data[error_idx-1][3]
+                    error_relation = idx2word(error_relation, id_type='relation')
+                    with open('error_analysis.txt', 'a') as outfile:
+                        outfile.write(question+'\t'+error_relation)
+
         with open('log.txt', 'a') as outfile:
             if args.pretrain_model == None:
                 outfile.write(str(test_acc)+'\t'+args.save_model_path+'\n')
