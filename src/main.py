@@ -164,7 +164,7 @@ def train(args):
             #batch_end_time = time.time()
             #print('one batch', batch_end_time-batch_start_time)
         print('\r', print_str, end='#\n')
-        val_print_str, val_loss, _ = evaluation(model, 'dev', global_step)
+        val_print_str, val_loss, _, _ = evaluation(model, 'dev', global_step)
         print('\rVal', val_print_str, '#\n')
         #log_str, _, test_acc = evaluation(model, 'test')
         #print('Test', log_str)
@@ -238,7 +238,7 @@ def evaluation(model, mode='dev', global_step=None):
                 score_list.append(ns)
             label_list += [0] * len(batch_neg_score)
             start = end
-            score_label = [(x, y, idx) for idx, x, y in enumerate(zip(score_list, label_list))]
+            score_label = [(x, y, idx) for idx, (x, y) in enumerate(zip(score_list, label_list))]
             #alpha_label = [(x, y) for x, y in zip(score_list_alpha, label_list)]
             #print("\n")
             #print(score_label[:10])
@@ -252,8 +252,9 @@ def evaluation(model, mode='dev', global_step=None):
             #file.write(sorted_alpha_label)
             #file.close()
             total_acc += cal_acc(sorted_score_label)
-            error_cases = extract_error(sorted_score_label)
-            error_idx.append(error_cases)
+            if mode == 'test':
+                error_cases = extract_error(sorted_score_label)
+                error_idx.append(error_cases)
             #print(total_acc)
 #        acc1 = total_acc / (batch_count * args.batch_size)
         # modify: batch_count should be batch_count * question_per_batch
@@ -367,21 +368,23 @@ if __name__ == '__main__':
         print(log_str)
         print(test_acc)
 
-        test_data = ''.join(test_data)
+        test_data = [obj for batch in test_data for obj in batch]
         if(len(test_data) != len(error_list)):
-            print(len(test_data), len(error_list))
+            print('Error: length of error list does not match with test data.', len(test_data), len(error_list))
             sys.exit()
         
         for idx, error_cases in enumerate(error_list):
         #Return: [[(question, pos_relas, pos_words, neg_relas, neg_words)*neg_size] * batch_size] * nb_batch]
             if len(error_cases) > 0:
-                question = test_data[idx][0]
-                question = idx2word(question, id_type='word')
+                question = test_data[idx][0][0]
+                question = corpus.idx2word(question, id_type='word')
+                correct_relation = test_data[idx][0][1]
+                correct_relation = corpus.idx2word(correct_relation, id_type='relation')
                 for error_idx in error_cases:
-                    error_relation = test_data[error_idx-1][3]
-                    error_relation = idx2word(error_relation, id_type='relation')
-                    with open('error_analysis.txt', 'a') as outfile:
-                        outfile.write(question+'\t'+error_relation)
+                    error_relation = test_data[idx][error_idx-1][3]
+                    error_relation = corpus.idx2word(error_relation, id_type='relation')
+                    with open(f'error_analysis_{args.save_model_path[-11:-3]}.txt', 'a') as outfile:
+                        outfile.write(question+'\t'+correct_relation+'\t'+error_relation+'\n')
 
         with open('log.txt', 'a') as outfile:
             if args.pretrain_model == None:
