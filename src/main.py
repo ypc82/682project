@@ -99,11 +99,9 @@ def train(args):
 
         for batch_count, batch_data in enumerate(train_data, 1):
             variable_start_time = time.time()
-            #import pdb; pdb.set_trace()
             if args.batch_type == 'batch_question':
                 training_objs = [obj for q_obj in batch_data for obj in q_obj]
                 question, pos_relas, pos_words, neg_relas, neg_words = zip(*training_objs)
-                #shuffle(question, pos_relas, pos_words, neg_relas, neg_words, random_state=682)
                 nb_question += len(batch_data)
             elif args.batch_type == 'batch_obj':
                 question, pos_relas, pos_words, neg_relas, neg_words = zip(*batch_data)
@@ -133,34 +131,34 @@ def train(args):
 
             # Calculate accuracy and f1
             if batch_count % args.print_every == 0:
-                if args.batch_type == 'batch_question':
-                    all_pos = all_pos_score.data.cpu().numpy()
-                    all_neg = all_neg_score.data.cpu().numpy()
-                    start, end = 0, 0
-                    for idx, q_obj in enumerate(batch_data):
-                        end += len(q_obj)
-                        score_list = [all_pos[start]]
-                        batch_neg_score = all_neg[start:end]
-                        start = end
-                        label_list = [1]
-                        for ns in batch_neg_score:
-                            score_list.append(ns)
-                        label_list += [0] * len(batch_neg_score)
-                        #print('len(score_list), score_list')
-                        #print(len(score_list), score_list)
-                        #print('len(label_list), label_list')
-                        #print(len(label_list), label_list)
-                        score_label = [(x, y) for x, y in zip(score_list, label_list)]
-                        sorted_score_label = sorted(score_label, key=lambda x:x[0], reverse=True)
-                        total_acc += cal_acc(sorted_score_label)
-                    #average_acc = total_acc / (batch_count * args.batch_size)
-                    #average_acc = total_acc / nb_question
-                    average_acc = total_acc / batch_count # batch_type = question, batch_size = 1
-                    elapsed = time.time() - epoch_start_time
-                    print_str = f'Epoch {epoch_count} batch {batch_count} Spend Time:{elapsed:.2f}s Loss:{average_loss*1000:.4f} Acc:{average_acc:.4f} #_question:{nb_question}'
-                else:
-                    elapsed = time.time() - epoch_start_time
-                    print_str = f'Epoch {epoch_count} batch {batch_count} Spend Time:{elapsed:.2f}s Loss:{average_loss*1000:.4f}'
+#                if args.batch_type == 'batch_question':
+#                    all_pos = all_pos_score.data.cpu().numpy()
+#                    all_neg = all_neg_score.data.cpu().numpy()
+#                    start, end = 0, 0
+#                    for idx, q_obj in enumerate(batch_data):
+#                        end += len(q_obj)
+#                        score_list = [all_pos[start]]
+#                        batch_neg_score = all_neg[start:end]
+#                        start = end
+#                        label_list = [1]
+#                        for ns in batch_neg_score:
+#                            score_list.append(ns)
+#                        label_list += [0] * len(batch_neg_score)
+#                        #print('len(score_list), score_list')
+#                        #print(len(score_list), score_list)
+#                        #print('len(label_list), label_list')
+#                        #print(len(label_list), label_list)
+#                        score_label = [(x, y) for x, y in zip(score_list, label_list)]
+#                        sorted_score_label = sorted(score_label, key=lambda x:x[0], reverse=True)
+#                        total_acc += cal_acc(sorted_score_label)
+#                    #average_acc = total_acc / (batch_count * args.batch_size)
+#                    #average_acc = total_acc / nb_question
+#                    average_acc = total_acc / batch_count # batch_type = question, batch_size = 1
+#                    elapsed = time.time() - epoch_start_time
+#                    print_str = f'Epoch {epoch_count} batch {batch_count} Spend Time:{elapsed:.2f}s Loss:{average_loss*1000:.4f} Acc:{average_acc:.4f} #_question:{nb_question}'
+#                else:
+                elapsed = time.time() - epoch_start_time
+                print_str = f'Epoch {epoch_count} batch {batch_count} Spend Time:{elapsed:.2f}s Loss:{average_loss*1000:.4f}'
                 print('\r', print_str, end='')
         print('\r', print_str, end='#\n')
         val_print_str, val_loss, _, _ = evaluation(model, 'dev', global_step)
