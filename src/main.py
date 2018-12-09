@@ -85,6 +85,7 @@ def train(args):
     best_model = None
     best_val_loss = None
     train_start_time = time.time()
+    print_str = ''
 
     earlystop_counter = 0
     global_step = 0
@@ -101,6 +102,7 @@ def train(args):
             if args.batch_type == 'batch_question':
                 training_objs = [obj for q_obj in batch_data for obj in q_obj]
                 question, pos_relas, pos_words, neg_relas, neg_words = zip(*training_objs)
+                shuffle(question, pos_relas, pos_words, neg_relas, neg_words, random_state=682)
                 nb_question += len(batch_data)
             elif args.batch_type == 'batch_obj':
                 question, pos_relas, pos_words, neg_relas, neg_words = zip(*batch_data)
@@ -158,17 +160,10 @@ def train(args):
                 else:
                     elapsed = time.time() - epoch_start_time
                     print_str = f'Epoch {epoch_count} batch {batch_count} Spend Time:{elapsed:.2f}s Loss:{average_loss*1000:.4f}'
-
-                #print_str = f'Epoch {epoch_count} batch {batch_count} Spend Time:{elapsed:.2f}s Loss:{average_loss*1000:.4f} Acc:{average_acc:.4f} #_question:{nb_question}'
                 print('\r', print_str, end='')
-            #batch_end_time = time.time()
-            #print('one batch', batch_end_time-batch_start_time)
         print('\r', print_str, end='#\n')
         val_print_str, val_loss, _, _ = evaluation(model, 'dev', global_step)
         print('\rVal', val_print_str, '#\n')
-        #log_str, _, test_acc = evaluation(model, 'test')
-        #print('Test', log_str)
-        #print('Test Acc', test_acc)
 
         # this section handle earlystopping
         if not best_val_loss or val_loss < best_val_loss:
