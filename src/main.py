@@ -99,10 +99,11 @@ def train(args):
 
         for batch_count, batch_data in enumerate(train_data, 1):
             variable_start_time = time.time()
+            #import pdb; pdb.set_trace()
             if args.batch_type == 'batch_question':
                 training_objs = [obj for q_obj in batch_data for obj in q_obj]
                 question, pos_relas, pos_words, neg_relas, neg_words = zip(*training_objs)
-                shuffle(question, pos_relas, pos_words, neg_relas, neg_words, random_state=682)
+                #shuffle(question, pos_relas, pos_words, neg_relas, neg_words, random_state=682)
                 nb_question += len(batch_data)
             elif args.batch_type == 'batch_obj':
                 question, pos_relas, pos_words, neg_relas, neg_words = zip(*batch_data)
@@ -319,7 +320,7 @@ if __name__ == '__main__':
             print('validation data length:', len(val_data))
         else:
             # shuffle training data
-            shuffle(corpus.token_train_data, corpus.train_data_len, random_state=1234)
+            corpus.token_train_data, corpus.train_data_len = shuffle(corpus.token_train_data, corpus.train_data_len, random_state=1234)
             # split training data to train and validation
             split_num = int(0.9*len(corpus.token_train_data))
             print('split_num=', split_num)
@@ -338,7 +339,7 @@ if __name__ == '__main__':
             flat_train_data_len = [obj for q_obj in train_data_len for obj in q_obj]
             print('len(flat_train_data)', len(flat_train_data))
             print('len(flat_train_data_len)', len(flat_train_data_len))
-            shuffle(flat_train_data, flat_train_data_len, random_state=1234)
+            flat_train_data, flat_train_data_len = shuffle(flat_train_data, flat_train_data_len, random_state=1234)
             train_data = batchify(flat_train_data, args.batch_obj_size)
             train_data_len = batchify(flat_train_data_len, args.batch_obj_size)
         val_data = batchify(val_data, args.batch_question_size)
