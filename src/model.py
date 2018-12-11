@@ -69,12 +69,12 @@ class HR_BiLSTM(nn.Module):
         # attention_scores = nn.functional.softmax(attention_scores, dim = 1)
         # context_v = th.bmm(attention_scores, question_out_1)
 
+        attention = self.attn(question_out_1, r)
+
         r = r.permute(0, 2, 1)
         relation_representation = nn.MaxPool1d(r.shape[2])(r).squeeze(dim=2)
 
         # Layer 2
-        question_out_2, _ = self.bilstm_2(question_out_1)
-        attention = self.attn(question_out_2, question_out_1)
 
         question_out_2, _ = self.bilstm_2(attention[0])
         question_out_2 = self.dropout(question_out_2)
