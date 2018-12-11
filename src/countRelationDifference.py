@@ -8,6 +8,19 @@ def load_relations_map(path):
             relations_map[idx] = line.split("..")
     return relations_map
 
+def getRelation(path, relation_map):
+
+    relation = set()
+
+    with open(path) as infile:
+        for idx, line in enumerate(infile, 1):
+            for s in line.split():
+                if s.isdigit():
+                    relation.add((int(s), len(relation_map[int(s)])))
+                else:
+                    break
+    return relation
+
 def countRelation(relation_set):
     """
     :param relation_set: a set that cotains tuples (relation_index, num_of_relation)
@@ -29,27 +42,14 @@ def countRelationDifference(data_type = 'WEBQSP'):
     if data_type == 'SQ':
         train_data_path = 'data/sq_relations/train.replace_ne.withpool'
         test_data_path = 'data/sq_relations/test.replace_ne.withpool'
+        relation_map = load_relations_map('data/sq_relations/relation.2M.list')
     else:
         train_data_path = 'data/webqsp_relations/WebQSP.RE.train.with_boundary.withpool.dlnlp.txt'
         test_data_path = 'data/webqsp_relations/WebQSP.RE.test.with_boundary.withpool.dlnlp.txt'
+        relation_map = load_relations_map('data/webqsp_relations/relations.txt')
 
-    relation = load_relations_map('data/webqsp_relations/relations.txt')
-
-    training_relation = set()
-    test_relation = set()
-
-    # Get relations in training and test set in a tuple (relation_index, num_of_relation)
-    with open(train_data_path) as infile:
-        for idx, line in enumerate(infile, 1):
-            for s in line.split():
-                if s.isdigit():
-                    training_relation.add((int(s), len(relation[int(s)])))
-
-    with open(test_data_path) as infile:
-        for idx, line in enumerate(infile, 1):
-            for s in line.split():
-                if s.isdigit():
-                    test_relation.add((int(s), len(relation[int(s)])))
+    training_relation = getRelation(train_data_path, relation_map)
+    test_relation = getRelation(test_data_path, relation_map)
 
     # Relations in test set but not training set
     relation_set_difference = test_relation.difference(training_relation)
