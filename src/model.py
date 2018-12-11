@@ -12,18 +12,21 @@ class HR_BiLSTM(nn.Module):
         self.nb_layers = 1
         self.dropout = nn.Dropout(dropout_rate)
         self.cos = nn.CosineSimilarity(1)
-        
+
         # Word Embedding layer
         self.word_embedding = nn.Embedding(word_emb.shape[0], self.emb_dim)
         self.word_embedding.weight = nn.Parameter(th.from_numpy(word_emb).float())
-        self.word_embedding.weight.requires_grad = True 
+        self.word_embedding.weight.requires_grad = True
         # Rela Embedding layer
         self.rela_embedding = nn.Embedding(rela_emb.shape[0], self.emb_dim)
         self.rela_embedding.weight = nn.Parameter(th.from_numpy(rela_emb).float())
-        self.rela_embedding.weight.requires_grad = True 
+        self.rela_embedding.weight.requires_grad = True
         # LSTM layer
         self.bilstm_1 = nn.LSTM(self.emb_dim, hidden_size, num_layers=self.nb_layers, bidirectional=True, batch_first=True)
         self.bilstm_2 = nn.LSTM(hidden_size*2, hidden_size, num_layers=self.nb_layers, bidirectional=True, batch_first=True)
+
+        # self.weights = nn.Parameter(th.rand((14, hidden_size * 2))).cuda()
+        self.attn = Attention(hidden_size*2)
 
     def revert_order(self, sorted_seq, sorted_seqidx):
         ori_seq = sorted_seq.clone()
@@ -58,12 +61,22 @@ class HR_BiLSTM(nn.Module):
         rela_relation_out = self.dropout(rela_relation_out)
 
         r = th.cat([rela_relation_out, word_relation_out], 1)
+
+        #        print('r', relation_representation.shape)
+
+        # Attention layer
+        # attention_scores = nn.functional.linear(question_out_1, self.weights)
+        # attention_scores = nn.functional.softmax(attention_scores, dim = 1)
+        # context_v = th.bmm(attention_scores, question_out_1)
+
         r = r.permute(0, 2, 1)
         relation_representation = nn.MaxPool1d(r.shape[2])(r).squeeze(dim=2)
-#        print('r', relation_representation.shape)
-        
+
         # Layer 2
         question_out_2, _ = self.bilstm_2(question_out_1)
+        attention = self.attn(question_out_2, question_out_1)
+
+        question_out_2, _ = self.bilstm_2(attention[0])
         question_out_2 = self.dropout(question_out_2)
         '''pack_pad_sequence
         packed_question, sorted_q_idx = self.pack_seq(question, q_seqlen)
@@ -75,13 +88,13 @@ class HR_BiLSTM(nn.Module):
         question_out_2, _ = th.nn.utils.rnn.pad_packed_sequence(question_out_2, batch_first=True)
         question_out_2 = self.dropout(question_out_2)
         '''
-        
+
         # Layer 3
         # 1st way of Hierarchical Residual Matching
         q12 = question_out_1 + question_out_2
         q12 = q12.permute(0, 2, 1)
         question_representation = nn.MaxPool1d(q12.shape[2])(q12).squeeze(dim=2)
-#        print('q', question_representation.shape)
+        #        print('q', question_representation.shape)
 
         # 2nd way of Hierarchical Residual Matching
         #q1_max = nn.MaxPool1d(question_out_1.shape[2])(question_out_1)
@@ -129,7 +142,7 @@ class HR_BiLSTM(nn.Module):
         '''
         score = self.cos(question_representation, relation_representation)
         return score
-    
+
 class Model(nn.Module):
     def __init__(self, args):
         super(Model, self).__init__()
@@ -141,11 +154,11 @@ class Model(nn.Module):
         self.rela_text_embedding.weight = nn.Parameter(th.from_numpy(args.rela_text_embedding).float())
         self.rela_embedding = nn.Embedding(args.rela_vocab_size, args.rela_text_embedding.shape[1])
         self.rnn = nn.LSTM(input_size=args.emb_size, hidden_size=args.hidden_size,
-                          num_layers=args.num_layers, batch_first=False,
-                          dropout=args.dropout_rate, bidirectional=True)
+                           num_layers=args.num_layers, batch_first=False,
+                           dropout=args.dropout_rate, bidirectional=True)
         self.rnn2 = nn.LSTM(input_size=args.hidden_size*2, hidden_size=args.hidden_size,
-                          num_layers=args.num_layers, batch_first=False,
-                          dropout=args.dropout_rate, bidirectional=True)
+                            num_layers=args.num_layers, batch_first=False,
+                            dropout=args.dropout_rate, bidirectional=True)
         self.dropout = nn.Dropout(args.dropout_rate)
         self.args = args
         self.cos = nn.CosineSimilarity(dim=1)
@@ -169,7 +182,7 @@ class Model(nn.Module):
         #c_0 = Variable(th.zeros([self.args.num_layers*2, len(ques_x[0]), self.args.hidden_size])).cuda()
         h_0 = Variable(th.zeros([self.args.num_layers*2, len(ques_x[0]), self.args.hidden_size])).to(device)
         c_0 = Variable(th.zeros([self.args.num_layers*2, len(ques_x[0]), self.args.hidden_size])).to(device)
-        ques_hs2, _ = self.rnn2(ques_hs1, (h_0, c_0)) 
+        ques_hs2, _ = self.rnn2(ques_hs1, (h_0, c_0))
 
         ques_hs = ques_hs1 + ques_hs2
         ques_hs = ques_hs.permute(1, 2, 0)
@@ -198,6 +211,12 @@ class Model(nn.Module):
         else:
             return outputs, (h_output, c_output)
 
+def new_parameter(*size):
+    out = nn.Parameter(th.FloatTensor(*size))
+    th.nn.init.xavier_normal(out)
+    return out
+
+
 class ABWIM(nn.Module):
     def __init__(self, dropout_rate, hidden_size, word_emb, rela_emb, q_len, r_len):
         super(ABWIM, self).__init__()
@@ -214,9 +233,9 @@ class ABWIM(nn.Module):
         self.rela_embedding.weight = nn.Parameter(th.from_numpy(rela_emb).float())
         self.rela_embedding.weight.requires_grad = False # fix the embedding matrix
         # LSTM layer
-        self.bilstm = nn.LSTM(word_emb.shape[1], 
-                              hidden_size, 
-                              num_layers=self.nb_layers, 
+        self.bilstm = nn.LSTM(word_emb.shape[1],
+                              hidden_size,
+                              num_layers=self.nb_layers,
                               bidirectional=True)
         # Attention
         self.W = nn.Parameter(th.rand((hidden_size*2, hidden_size*2))).cuda()
@@ -258,7 +277,7 @@ class ABWIM(nn.Module):
         energy = th.matmul(relation, self.W)
         energy = th.matmul(energy, question_out)
         alpha = F.softmax(energy, dim=-1)
-        return alpha 
+        return alpha
     def forward(self, question, rela_relation, word_relation):
         question = th.transpose(question, 0, 1)
         rela_relation = th.transpose(rela_relation, 0, 1)
@@ -271,7 +290,7 @@ class ABWIM(nn.Module):
         word_relation = self.word_embedding(word_relation)
         word_relation = self.dropout(word_relation)
 
-#        self.bilstm.flatten_parameters()
+        #        self.bilstm.flatten_parameters()
         question_out, _ = self.bilstm(question)
         question_out = question_out.permute(1,2,0)
         question_out = self.dropout(question_out)
@@ -306,7 +325,95 @@ class ABWIM(nn.Module):
         h = th.max(h, 2)[0]
         score = self.linear(h).squeeze()
         return score
-    
+
+class Attention(nn.Module):
+    """ Applies attention mechanism on the `context` using the `query`.
+
+    **Thank you** to IBM for their initial implementation of :class:`Attention`. Here is
+    their `License
+    <https://github.com/IBM/pytorch-seq2seq/blob/master/LICENSE>`__.
+
+    Args:
+        dimensions (int): Dimensionality of the query and context.
+        attention_type (str, optional): How to compute the attention score:
+
+            * dot: :math:`score(H_j,q) = H_j^T q`
+            * general: :math:`score(H_j, q) = H_j^T W_a q`
+
+    Example:
+
+         >>> attention = Attention(256)
+         >>> query = torch.randn(5, 1, 256)
+         >>> context = torch.randn(5, 5, 256)
+         >>> output, weights = attention(query, context)
+         >>> output.size()
+         torch.Size([5, 1, 256])
+         >>> weights.size()
+         torch.Size([5, 1, 5])
+    """
+
+    def __init__(self, dimensions, attention_type='general'):
+        super(Attention, self).__init__()
+
+        if attention_type not in ['dot', 'general']:
+            raise ValueError('Invalid attention type selected.')
+
+        self.attention_type = attention_type
+        if self.attention_type == 'general':
+            self.linear_in = nn.Linear(dimensions, dimensions, bias=False)
+
+        self.linear_out = nn.Linear(dimensions * 2, dimensions, bias=False)
+        self.softmax = nn.Softmax(dim=-1)
+        self.tanh = nn.Tanh()
+    def forward(self, query, context):
+        """
+        Args:
+            query (:class:`torch.FloatTensor` [batch size, output length, dimensions]): Sequence of
+                queries to query the context.
+            context (:class:`torch.FloatTensor` [batch size, query length, dimensions]): Data
+                overwhich to apply the attention mechanism.
+
+        Returns:
+            :class:`tuple` with `output` and `weights`:
+            * **output** (:class:`torch.LongTensor` [batch size, output length, dimensions]):
+              Tensor containing the attended features.
+            * **weights** (:class:`torch.FloatTensor` [batch size, output length, query length]):
+              Tensor containing attention weights.
+        """
+        batch_size, output_len, dimensions = query.size()
+        query_len = context.size(1)
+
+        if self.attention_type == "general":
+            query = query.contiguous().view(batch_size * output_len, dimensions)
+            query = self.linear_in(query)
+            query = query.view(batch_size, output_len, dimensions)
+
+        # TODO: Include mask on PADDING_INDEX?
+
+        # (batch_size, output_len, dimensions) * (batch_size, query_len, dimensions) ->
+        # (batch_size, output_len, query_len)
+        attention_scores = th.bmm(query, context.transpose(1, 2).contiguous())
+
+        # Compute weights across every context sequence
+        attention_scores = attention_scores.view(batch_size * output_len, query_len)
+        attention_weights = self.softmax(attention_scores)
+        attention_weights = attention_weights.view(batch_size, output_len, query_len)
+
+        # (batch_size, output_len, query_len) * (batch_size, query_len, dimensions) ->
+        # (batch_size, output_len, dimensions)
+        mix = th.bmm(attention_weights, context)
+
+        # concat -> (batch_size * output_len, 2*dimensions)
+        combined = th.cat((mix, query), dim=2)
+        combined = combined.view(batch_size * output_len, 2 * dimensions)
+
+        # Apply linear_out on every 2nd dimension of concat
+        # output -> (batch_size, output_len, dimensions)
+        output = self.linear_out(combined).view(batch_size, output_len, dimensions)
+        output = self.tanh(output)
+
+        return output, attention_weights
+
 if __name__ == '__main__':
     import numpy as np
     dropout = 0.35
@@ -320,11 +427,11 @@ if __name__ == '__main__':
     with open(word_embedding_path) as infile:
         for line in infile:
             tokens = line.strip().split()
-            word_embedding.append([float(x) for x in tokens[1:]]) 
+            word_embedding.append([float(x) for x in tokens[1:]])
     with open(rela_embedding_path) as infile:
         for line in infile:
             tokens = line.strip().split()
-            rela_embedding.append([float(x) for x in tokens[1:]]) 
+            rela_embedding.append([float(x) for x in tokens[1:]])
     word_embedding = np.array(word_embedding)
     rela_embedding = np.array(rela_embedding)
 
@@ -349,8 +456,9 @@ if __name__ == '__main__':
         q = Variable(th.LongTensor(question)).cuda()
         p_relas = Variable(th.LongTensor(pos_relas[batch_count-1])).cuda()
         p_words = Variable(th.LongTensor(pos_words[batch_count-1])).cuda()
-            
+
         optimizer.zero_grad()
         all_pos_score = model(q, p_relas, p_words)
         #all_pos_score = model(q, p_relas, p_words, q_length, pos_r_length, pos_w_length)
         sys.exit()
+
