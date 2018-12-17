@@ -11,6 +11,15 @@ def load_relations_map(path):
     return relations_map
 
 def getRelationStats(path, relation_map):
+    """
+
+    :param path: file path
+    :param relation_map: preprocessed relation map
+    :return: relation: unique relations that appear in a data set
+             max_n: max number of relations appear in a question
+             min_n: min number of relations appear in a question
+             avg_n: average number of relations appear in a question 
+    """
 
     relation = set()
     total_n_question = 0
