@@ -1,3 +1,5 @@
+import math
+
 def load_relations_map(path):
     ''' Return self.relations_map = {idx:relation_names}
     '''
@@ -7,6 +9,43 @@ def load_relations_map(path):
         for idx, line in enumerate(infile, 1):
             relations_map[idx] = line.split("..")
     return relations_map
+
+def getRelationStats(path, relation_map):
+    """
+
+    :param path: file path
+    :param relation_map: preprocessed relation map
+    :return: relation: unique relations that appear in a data set
+             max_n: max number of relations appear in a question
+             min_n: min number of relations appear in a question
+             avg_n: average number of relations appear in a question 
+    """
+
+    relation = set()
+    total_n_question = 0
+    avg_n, max_n, min_n  = 0, 0, math.inf
+
+    with open(path) as infile:
+        for idx, line in enumerate(infile, 1):
+            count = 0
+            total_n_question += 1
+
+            for s in line.split():
+                if s.isdigit():
+                    count += len(relation_map[int(s)])
+                    avg_n += len(relation_map[int(s)])
+                    relation.add((int(s), len(relation_map[int(s)])))
+                else:
+                    break
+
+            if count > max_n:
+                max_n = count
+
+            if count < min_n:
+                min_n = count
+
+        avg_n /= total_n_question
+    return relation, max_n, min_n, avg_n
 
 def countRelation(relation_set):
     """
@@ -29,27 +68,14 @@ def countRelationDifference(data_type = 'WEBQSP'):
     if data_type == 'SQ':
         train_data_path = 'data/sq_relations/train.replace_ne.withpool'
         test_data_path = 'data/sq_relations/test.replace_ne.withpool'
+        relation_map = load_relations_map('data/sq_relations/relation.2M.list')
     else:
         train_data_path = 'data/webqsp_relations/WebQSP.RE.train.with_boundary.withpool.dlnlp.txt'
         test_data_path = 'data/webqsp_relations/WebQSP.RE.test.with_boundary.withpool.dlnlp.txt'
+        relation_map = load_relations_map('data/webqsp_relations/relations.txt')
 
-    relation = load_relations_map('data/webqsp_relations/relations.txt')
-
-    training_relation = set()
-    test_relation = set()
-
-    # Get relations in training and test set in a tuple (relation_index, num_of_relation)
-    with open(train_data_path) as infile:
-        for idx, line in enumerate(infile, 1):
-            for s in line.split():
-                if s.isdigit():
-                    training_relation.add((int(s), len(relation[int(s)])))
-
-    with open(test_data_path) as infile:
-        for idx, line in enumerate(infile, 1):
-            for s in line.split():
-                if s.isdigit():
-                    test_relation.add((int(s), len(relation[int(s)])))
+    training_relation, max_n_train, min_n_train, avg_n_train = getRelationStats(train_data_path, relation_map)
+    test_relation, max_n_test, min_n_test, avg_n_test = getRelationStats(test_data_path, relation_map)
 
     # Relations in test set but not training set
     relation_set_difference = test_relation.difference(training_relation)
@@ -59,10 +85,19 @@ def countRelationDifference(data_type = 'WEBQSP'):
     relation_num_difference = countRelation(relation_set_difference)
 
     print("Number of relation in training set: ", relation_num_training)
+    print("average relation number in training set: ", avg_n_train)
+    print("max relation number in a training set question: ", max_n_train)
+    print("min relation number in a training set question: ", min_n_train)
+
     print("Number of relation in test set: ", relation_num_test)
+    print("average relation number in test set: ", avg_n_test)
+    print("max relation number in a test set question: ", max_n_test)
+    print("min relation number in a test set question: ", min_n_test)
+
     print("Relation in test set but not training set", relation_num_difference)
 
 
-countRelationDifference()
+
+countRelationDifference("WQ")
 
 
