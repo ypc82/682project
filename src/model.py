@@ -5,8 +5,12 @@ from torch import nn
 from torch.autograd import Variable
 
 class HR_BiLSTM(nn.Module):
-    def __init__(self, dropout_rate, hidden_size, word_emb, rela_emb):
+    def __init__(self, dropout_rate, hidden_size, word_emb, rela_emb, model_arch, attention_flag=False, cnn_flag=False):
         super(HR_BiLSTM, self).__init__()
+        self.attention_flag = attention_flag
+        self.cnn_flag = cnn_flag
+        self.cnn_filters = 100
+        self.arch_type = model_arch
         self.hidden_size = hidden_size
         self.emb_dim = word_emb.shape[1]
         self.nb_layers = 1
@@ -21,12 +25,19 @@ class HR_BiLSTM(nn.Module):
         self.rela_embedding = nn.Embedding(rela_emb.shape[0], self.emb_dim)
         self.rela_embedding.weight = nn.Parameter(th.from_numpy(rela_emb).float())
         self.rela_embedding.weight.requires_grad = True
+
         # LSTM layer
         self.bilstm_1 = nn.LSTM(self.emb_dim, hidden_size, num_layers=self.nb_layers, bidirectional=True, batch_first=True)
         self.bilstm_2 = nn.LSTM(hidden_size*2, hidden_size, num_layers=self.nb_layers, bidirectional=True, batch_first=True)
+        
+        # CNN layer
+        self.cnn_1 = nn.Conv1d(hidden_size*4, self.cnn_filters, 1)
+        self.cnn_2 = nn.Conv1d(hidden_size*4, self.cnn_filters, 3)
+        self.cnn_3 = nn.Conv1d(hidden_size*4, self.cnn_filters, 5)
 
-        # self.weights = nn.Parameter(th.rand((14, hidden_size * 2))).cuda()
-        self.attn = Attention(hidden_size*2)
+        # Attention Layer
+        if self.attention_flag == True:
+            self.attn = Attention(hidden_size*2)
 
     def revert_order(self, sorted_seq, sorted_seqidx):
         ori_seq = sorted_seq.clone()
@@ -42,104 +53,97 @@ class HR_BiLSTM(nn.Module):
         packed_seq  = nn.utils.rnn.pack_padded_sequence(sorted_seq, sorted_seqlen, batch_first=True)
         return packed_seq, sorted_seqidx
 
+    def encode_question(self, question, relation):
+        if self.arch_type == 'B':
+            return question
+
+        elif self.arch_type == 'BB':
+            question2, _ = self.bilstm_2(question)
+            question2 = self.dropout(question2)
+            return question2
+
+        elif self.arch_type == 'BA':
+            atten_output, atten_weight = self.attn(question, relation)
+            return atten_output
+
+        elif self.arch_type == 'BBR':
+            # 1st way of Hierarchical Residual Matching
+            question2, _ = self.bilstm_2(question)
+            question2 = self.dropout(question2)
+            return question + question2
+            # 2nd way of Hierarchical Residual Matching
+            #q1_max = nn.MaxPool1d(question_out_1.shape[2])(question_out_1)
+            #q2_max = nn.MaxPool1d(question_out_2.shape[2])(question_out_2)
+            #question_representation = q1_max + q2_max
+
+        elif self.arch_type == 'BBA':
+            question2, _ = self.bilstm_2(question)
+            question2 = self.dropout(question2)
+            atten_output, atten_weight = self.attn(question2, relation)
+            return atten_output
+
+        elif self.arch_type == 'BAB':
+            atten_output, atten_weight = self.attn(question, relation)
+            question2, _ = self.bilstm_2(atten_output)
+            question2 = self.dropout(question2)
+            return question2
+
+        elif self.arch_type == 'BABR':
+            atten_output, atten_weight = self.attn(question, relation)
+            question2, _ = self.bilstm_2(atten_output)
+            question2 = self.dropout(question2)
+            return atten_output + question2
+        
+        elif self.arch_type == 'BABA':
+            atten_output, atten_weight = self.attn(question, relation)
+            question2, _ = self.bilstm_2(atten_output)
+            question2 = self.dropout(question2)
+            atten_output2, atten_weight2 = self.attn(question2, relation)
+            return atten_output2
+
+        elif self.arch_type == 'BABAR':
+            atten_output, atten_weight = self.attn(question, relation)
+            question2, _ = self.bilstm_2(atten_output)
+            question2 = self.dropout(question2)
+            atten_output2, atten_weight2 = self.attn(question2, relation)
+            return atten_output + atten_output2
+
+        else:
+            print("Error: This model architecture does not exist!")
+            sys.exit()
+        
     def forward(self, question, rela_relation, word_relation):
         # Embedding Layer
         question = self.dropout(self.word_embedding(question))
         rela_relation = self.dropout(self.rela_embedding(rela_relation))
         word_relation = self.dropout(self.word_embedding(word_relation))
 
-        # Layer 1
-        # Question Representation
+        # Bi-LSTM_1
+        # question_out_1.shape = (batch_size, q_len, hidden_size)
         question_out_1, question_hidden = self.bilstm_1(question)
         question_out_1 = self.dropout(question_out_1)
 
-        # Relation Representation
         word_relation_out, word_relation_hidden = self.bilstm_1(word_relation)
         word_relation_out = self.dropout(word_relation_out)
 
         rela_relation_out, rela_relation_hidden = self.bilstm_1(rela_relation, word_relation_hidden)
         rela_relation_out = self.dropout(rela_relation_out)
 
+        # r.shape = (batch_size, (rela_len+word_len), hidden_size)
         r = th.cat([rela_relation_out, word_relation_out], 1)
+        
+        # Question Representation
+        q = self.encode_question(question_out_1, r)
+        #q = self.encode_question(question_out_1, word_relation_out)
+        q = q.permute(0, 2, 1)
+        question_representation = nn.MaxPool1d(q.shape[2])(q).squeeze(dim=2)
+        #print('q', question_representation.shape)
 
-        #        print('r', relation_representation.shape)
-
-        # Attention layer
-        # attention_scores = nn.functional.linear(question_out_1, self.weights)
-        # attention_scores = nn.functional.softmax(attention_scores, dim = 1)
-        # context_v = th.bmm(attention_scores, question_out_1)
-
-        attention = self.attn(question_out_1, r)
-
+        # Relation Representation
         r = r.permute(0, 2, 1)
         relation_representation = nn.MaxPool1d(r.shape[2])(r).squeeze(dim=2)
+        #print('r', relation_representation.shape)
 
-        # Layer 2
-
-        question_out_2, _ = self.bilstm_2(attention[0])
-        question_out_2 = self.dropout(question_out_2)
-        '''pack_pad_sequence
-        packed_question, sorted_q_idx = self.pack_seq(question, q_seqlen)
-        question_out_1, question_hidden = self.bilstm_1(packed_question)
-        question_out_1, _ = th.nn.utils.rnn.pad_packed_sequence(question_out_1, batch_first=True)
-        question_out_1 = self.dropout(question_out_1)
-        packed_question_out_1, _ = self.pack_seq(question_out_1, q_seqlen)
-        question_out_2, _ = self.bilstm_2(packed_question_out_1)
-        question_out_2, _ = th.nn.utils.rnn.pad_packed_sequence(question_out_2, batch_first=True)
-        question_out_2 = self.dropout(question_out_2)
-        '''
-
-        # Layer 3
-        # 1st way of Hierarchical Residual Matching
-        q12 = question_out_1 + question_out_2
-        q12 = q12.permute(0, 2, 1)
-        question_representation = nn.MaxPool1d(q12.shape[2])(q12).squeeze(dim=2)
-        #        print('q', question_representation.shape)
-
-        # 2nd way of Hierarchical Residual Matching
-        #q1_max = nn.MaxPool1d(question_out_1.shape[2])(question_out_1)
-        #q2_max = nn.MaxPool1d(question_out_2.shape[2])(question_out_2)
-        #question_representation = q1_max + q2_max
-
-        '''pack_pad_sequence
-        # Revert to original order
-        question_representation = self.revert_order(question_representation, sorted_q_idx)
-
-        packed_rela_relation, sorted_rela_idx = self.pack_seq(rela_relation, rela_seqlen)
-        packed_word_relation, sorted_word_idx = self.pack_seq(word_relation, word_seqlen)
-        
-        word_relation_out, word_relation_hidden = self.bilstm_1(packed_word_relation)
-        word_relation_out, _ = th.nn.utils.rnn.pad_packed_sequence(word_relation_out, batch_first=True)
-        word_relation_out = self.dropout(word_relation_out)
-        print('word_relation_out.shape', word_relation_out.shape)
-
-        # Revert to original order
-        print(len(word_relation_hidden))
-        print(len(word_relation_hidden[0]))
-        print(len(word_relation_hidden[0][0]))
-        print(len(word_relation_hidden[0][0][0]))
-        sys.exit()
-        word_relation_h = self.revert_order(word_relation_hidden[0], sorted_word_idx)
-        word_relation_c = self.revert_order(word_relation_hidden[1], sorted_word_idx)
-        # Transform to rela_relation order
-        word_relation_h = self.revert_order(word_relation_h, sorted_rela_idx)
-        word_relation_c = self.revert_order(word_relation_c, sorted_rela_idx)
-
-        rela_relation_out, rela_relation_hidden = self.bilstm_1(packed_rela_relation, (word_relation_h, word_relation_c))
-        rela_relation_out, _ = th.nn.utils.rnn.pad_packed_sequence(rela_relation_out, batch_first=True)
-        rela_relation_out = self.dropout(rela_relation_out)
-        print('rela_relation_out.shape', rela_relation_out.shape)
-        r = th.cat([rela_relation_out, word_relation_out], 0)
-        print('r.shape', r.shape)
-        r = r.permute(0, 2, 1)
-        print('r.shape', r.shape)
-        relation_representation = nn.MaxPool1d(r.shape[0])(r).squeeze()
-        print('relation_representation.shape', relation_representation.shape)
-        sys.exit()
-
-        # Revert to original order
-        relation_representation = self.revert_order(relation_representation, sorted_rela_idx)
-        '''
         score = self.cos(question_representation, relation_representation)
         return score
 
@@ -403,16 +407,17 @@ class Attention(nn.Module):
         # (batch_size, output_len, dimensions)
         mix = th.bmm(attention_weights, context)
 
-        # concat -> (batch_size * output_len, 2*dimensions)
-        combined = th.cat((mix, query), dim=2)
-        combined = combined.view(batch_size * output_len, 2 * dimensions)
-
-        # Apply linear_out on every 2nd dimension of concat
-        # output -> (batch_size, output_len, dimensions)
-        output = self.linear_out(combined).view(batch_size, output_len, dimensions)
-        output = self.tanh(output)
-
-        return output, attention_weights
+#        # concat -> (batch_size * output_len, 2*dimensions)
+#        combined = th.cat((mix, query), dim=2)
+#        combined = combined.view(batch_size * output_len, 2 * dimensions)
+#
+#        # Apply linear_out on every 2nd dimension of concat
+#        # output -> (batch_size, output_len, dimensions)
+#        output = self.linear_out(combined).view(batch_size, output_len, dimensions)
+#        output = self.tanh(output)
+#
+#        return output, attention_weights
+        return mix, attention_weights
 
 if __name__ == '__main__':
     import numpy as np

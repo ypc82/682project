@@ -68,7 +68,7 @@ def train(args):
         #print('q_len', q_len, 'r_len', r_len)
         model = ABWIM(args.dropout, args.hidden_size, corpus.word_embedding, corpus.rela_embedding, q_len, r_len).to(device)
     elif args.model == 'HR-BiLSTM':
-        model = HR_BiLSTM(args.dropout, args.hidden_size, corpus.word_embedding, corpus.rela_embedding).to(device)
+        model = HR_BiLSTM(args.dropout, args.hidden_size, corpus.word_embedding, corpus.rela_embedding, args.model_arch, args.atten_flag).to(device)
     #print(model)
 
     if args.optimizer == 'Adadelta':
@@ -84,6 +84,7 @@ def train(args):
 
     best_model = None
     best_val_loss = None
+    best_val_acc = None
     train_start_time = time.time()
     print_str = ''
 
@@ -161,20 +162,21 @@ def train(args):
                 print_str = f'Epoch {epoch_count} batch {batch_count} Spend Time:{elapsed:.2f}s Loss:{average_loss*1000:.4f}'
                 print('\r', print_str, end='')
         print('\r', print_str, end='#\n')
-        val_print_str, val_loss, _, _, _ = evaluation(model, 'dev', global_step)
+        val_print_str, val_loss, val_acc, _, _ = evaluation(model, 'dev', global_step)
         print('\rVal', val_print_str, '#')
 
         # this section handle earlystopping
-        if not best_val_loss or val_loss < best_val_loss:
+#        if not best_val_loss or val_loss < best_val_loss:
+        if not best_val_acc or val_acc > best_val_acc:
             earlystop_counter = 0
             best_model = model
             save_best_model(best_model)
-            best_val_loss = val_loss
+#            best_val_loss = val_loss
+            best_val_acc = val_acc
         else:
             earlystop_counter += 1
         if earlystop_counter >= args.earlystop_tolerance:
             print('EarlyStopping!')
-            print(f'Total training time {time.time()-train_start_time:.2f}')
             break
     print(f'Total training time {time.time()-train_start_time:.2f}')
     return best_model
@@ -302,6 +304,9 @@ if __name__ == '__main__':
     parser.add_argument('--pretrain_model', type=str, default=None)
     parser.add_argument('--data_type', type=str, default='WQ') # [SQ/WQ]
     parser.add_argument('--print_every', type=int, default=10)
+    parser.add_argument('-atten_flag', default=False, action='store_true')
+    parser.add_argument('--model_arch', type=str, default='BBR')
+    parser.add_argument('--note', type=str, default='')
     args = parser.parse_args()
     
     if args.model == 'ABWIM':
@@ -315,7 +320,13 @@ if __name__ == '__main__':
     if args.train:
         if args.data_type == 'SQ':
             train_data = corpus.token_train_data
-            train_data_len = corpus.train_data_len
+            ori_len = len(train_data)
+            print('training data length:', ori_len)
+            i_len = int(ori_len * 0.1)
+            print('input length:', i_len )
+            train_data = train_data[:i_len]
+            train_data_len = corpus.train_data_len[:i_len]
+            #train_data_len = corpus.train_data_len
             val_data = corpus.token_val_data
             print('training data length:', len(train_data))
             print('validation data length:', len(val_data))
@@ -342,7 +353,7 @@ if __name__ == '__main__':
             print('len(flat_train_data_len)', len(flat_train_data_len))
             flat_train_data, flat_train_data_len = shuffle(flat_train_data, flat_train_data_len, random_state=1234)
             train_data = batchify(flat_train_data, args.batch_obj_size)
-            train_data_len = batchify(flat_train_data_len, args.batch_obj_size)
+            #train_data_len = batchify(flat_train_data_len, args.batch_obj_size)
         val_data = batchify(val_data, args.batch_question_size)
 
         # Create SummaryWriter
@@ -381,7 +392,7 @@ if __name__ == '__main__':
                 for error_idx in error_cases:
                     error_relation = test_data[idx][error_idx-1][3]
                     error_relation = corpus.idx2word(error_relation, id_type='relation')
-                    with open(f'error_analysis_{args.save_model_path[-11:-3]}.txt', 'a') as outfile:
+                    with open(f'error_log/error_analysis_{args.save_model_path[-11:-3]}.txt', 'a') as outfile:
                         outfile.write(question+'\t'+correct_relation+'\t'+error_relation+'\n')
 
         with open('log.txt', 'a') as outfile:
